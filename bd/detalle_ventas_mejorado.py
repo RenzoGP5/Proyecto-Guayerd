@@ -109,12 +109,8 @@ def calcular_cantidad(precio_unitario, tipo_compra):
 
 def generar_detalle_venta_mejorado(venta, tipo_compra, df_productos):
     """
-    Genera el detalle completo de una venta CON MEJORAS:
-    
-    1. ✅ Control de monto máximo
-    2. ✅ Evita duplicados de forma robusta
-    3. ✅ Agrega ID único a cada línea de detalle
-    4. ✅ Genera precios históricos opcionales
+    Genera el detalle completo de una venta de forma ROBUSTA
+    GARANTIZA al menos 1 producto por venta
     """
     config = TIPOS_COMPRA[tipo_compra]
     num_productos_objetivo = random.randint(config['num_productos'][0], config['num_productos'][1])
@@ -122,44 +118,36 @@ def generar_detalle_venta_mejorado(venta, tipo_compra, df_productos):
     detalles = []
     productos_seleccionados = set()
     total_acumulado = 0
-    
-    # Crear lista de productos disponibles para selección más eficiente
-    productos_disponibles = df_productos.copy()
+    presupuesto_restante = config['monto_max'] * 1.1
     
     for i in range(num_productos_objetivo):
-        # Si quedan pocos productos disponibles, usar todos
-        if len(productos_disponibles) == 0:
-            break
         
-        # Seleccionar producto (intentos limitados)
-        producto = None
-        intentos = 0
-        max_intentos = 20  # Aumentado de 10 a 20
+        # FILTRAR productos que SÍ caben en el presupuesto restante
+        productos_viables = df_productos[
+            (~df_productos['id_producto'].isin(productos_seleccionados)) &  # No duplicados
+            (df_productos['precio_unitario'] <= presupuesto_restante)      # Caben en presupuesto
+        ]
         
-        while intentos < max_intentos:
-            producto_candidato = seleccionar_producto_por_popularidad(productos_disponibles)
-            
-            if producto_candidato['id_producto'] not in productos_seleccionados:
-                producto = producto_candidato
-                productos_seleccionados.add(producto['id_producto'])
-                break
-            
-            intentos += 1
-        
-        # Si después de max_intentos no encontró único, tomar uno aleatorio de los NO seleccionados
-        if producto is None:
-            productos_no_usados = productos_disponibles[
-                ~productos_disponibles['id_producto'].isin(productos_seleccionados)
+        # Si no hay productos viables sin duplicar, permitir duplicados como último recurso
+        if len(productos_viables) == 0:
+            productos_viables = df_productos[
+                df_productos['precio_unitario'] <= presupuesto_restante
             ]
-            
-            if len(productos_no_usados) == 0:
-                break  # No quedan productos únicos disponibles
-            
-            producto = productos_no_usados.sample(1).iloc[0]
-            productos_seleccionados.add(producto['id_producto'])
         
-        # Calcular cantidad y validar monto
-        cantidad = calcular_cantidad(producto['precio_unitario'])
+        # Si AÚN no hay productos viables (presupuesto muy bajo), tomar el más barato
+        if len(productos_viables) == 0:
+            # Si ya tiene productos, terminar aquí
+            if len(detalles) > 0:
+                break
+            # Si no tiene ninguno, FORZAR el producto más barato
+            productos_viables = df_productos.nsmallest(1, 'precio_unitario')
+        
+        # Seleccionar producto de los viables
+        producto = seleccionar_producto_por_popularidad(productos_viables)
+        productos_seleccionados.add(producto['id_producto'])
+        
+        # Calcular cantidad
+        cantidad = calcular_cantidad(producto['precio_unitario'], tipo_compra)
         
         # Opcional: Aplicar variación de precio histórico (5% de los productos)
         precio_unitario = producto['precio_unitario']
@@ -169,20 +157,24 @@ def generar_detalle_venta_mejorado(venta, tipo_compra, df_productos):
         
         importe = cantidad * precio_unitario
         
-        # Control de monto máximo (con tolerancia del 10%)
-        if total_acumulado + importe > config['monto_max'] * 1.1:
-            # Ajustar cantidad para no exceder
-            importe_disponible = config['monto_max'] * 1.1 - total_acumulado
+        # Ajustar cantidad si excede presupuesto restante
+        if importe > presupuesto_restante:
+            # Calcular cuántas unidades SÍ caben
+            cantidad_maxima = int(presupuesto_restante / precio_unitario)
             
-            if importe_disponible < precio_unitario:
-                # No cabe ni una unidad, terminar
-                break
-            
-            cantidad = max(1, int(importe_disponible / precio_unitario))
-            importe = cantidad * precio_unitario
+            if cantidad_maxima >= 1:
+                cantidad = cantidad_maxima
+                importe = cantidad * precio_unitario
+            else:
+                # No cabe ni 1 unidad
+                if len(detalles) > 0:
+                    break  # Ya tiene productos, puede terminar
+                else:
+                    # FORZAR 1 unidad aunque exceda (para no dejar venta vacía)
+                    cantidad = 1
+                    importe = precio_unitario
         
-        total_acumulado += importe
-        
+        # Agregar el detalle
         detalle = {
             'id_venta': venta['id_venta'],
             'id_producto': int(producto['id_producto']),
@@ -193,13 +185,35 @@ def generar_detalle_venta_mejorado(venta, tipo_compra, df_productos):
         }
         detalles.append(detalle)
         
-        # Si alcanzó monto mínimo y ya tiene suficientes productos, puede terminar
-        if total_acumulado >= config['monto_min'] and i >= config['num_productos'][0] - 1:
+        # Actualizar acumuladores
+        total_acumulado += importe
+        presupuesto_restante -= importe
+        
+        # Si alcanzó monto mínimo y ya tiene suficientes productos, puede terminar opcionalmente
+        if total_acumulado >= config['monto_min'] and len(detalles) >= config['num_productos'][0]:
             if random.random() < 0.3:  # 30% chance de terminar antes
                 break
+        
+        # Si el presupuesto restante es muy bajo, terminar
+        if presupuesto_restante < 500 and len(detalles) >= config['num_productos'][0]:
+            break
+    
+    # VALIDACIÓN FINAL: Si por alguna razón imposible no hay detalles, agregar 1 producto básico
+    if len(detalles) == 0:
+        producto_basico = df_productos.nsmallest(1, 'precio_unitario').iloc[0]
+        cantidad = 1
+        
+        detalle = {
+            'id_venta': venta['id_venta'],
+            'id_producto': int(producto_basico['id_producto']),
+            'nombre_producto': producto_basico['nombre_producto'],
+            'cantidad': cantidad,
+            'precio_unitario': producto_basico['precio_unitario'],
+            'importe': cantidad * producto_basico['precio_unitario']
+        }
+        detalles.append(detalle)
     
     return detalles
-
 
 # ============================================================
 # FUNCIÓN PRINCIPAL DE GENERACIÓN
