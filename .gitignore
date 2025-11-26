@@ -1,0 +1,30 @@
+# Entorno virtual
+venv/
+env/
+.env
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Datos grandes (opcional)
+*.csv
+*.xlsx
+*.json
+data/
+datasets/
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
