@@ -72,14 +72,35 @@ def seleccionar_producto_por_popularidad(df_productos):
         return df_productos.sample(1).iloc[0]
 
 
-def calcular_cantidad(precio_unitario):
-    """Calcula cantidad realista según el precio del producto"""
+def calcular_cantidad(precio_unitario, tipo_compra):
+    """Calcula cantidad realista según precio Y tipo de compra"""
+    
+    # PRODUCTOS BARATOS (<$2000)
     if precio_unitario < 2000:
-        return random.randint(1, 4)
+        if tipo_compra == 'rapida_snack':
+            return random.randint(1, 2)
+        elif tipo_compra == 'diaria_basica':
+            return random.randint(1, 4)
+        elif tipo_compra == 'semanal':
+            return random.randint(2, 8)
+        else:  # grande_mensual
+            return random.randint(3, 12)
+    
+    # PRODUCTOS MEDIOS ($2000-$4000)
     elif precio_unitario < 4000:
-        return random.randint(1, 3)
+        if tipo_compra in ['rapida_snack', 'diaria_basica']:
+            return random.randint(1, 2)
+        elif tipo_compra == 'semanal':
+            return random.randint(1, 4)
+        else:  # grande_mensual
+            return random.randint(2, 6)
+    
+    # PRODUCTOS CAROS (>$4000)
     else:
-        return random.randint(1, 2)
+        if tipo_compra in ['rapida_snack', 'diaria_basica']:
+            return 1
+        else:  # semanal o grande_mensual
+            return random.randint(1, 3)
 
 
 # ============================================================
