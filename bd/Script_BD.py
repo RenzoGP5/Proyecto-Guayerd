@@ -4,7 +4,7 @@ import random
 from datetime import datetime, timedelta
 import re
 import os
-from bd.detalle_ventas_mejorado import generar_tabla_detalle_ventas_mejorada, validar_detalle_ventas
+from detalle_ventas_mejorado import generar_tabla_detalle_ventas_mejorada, validar_detalle_ventas
 
 
 # Configuración
@@ -12,7 +12,7 @@ fake = Faker(['es_AR'])
 random.seed(42)  # Para reproducibilidad
 
 # Parámetros del negocio
-NUM_CLIENTES = 576
+NUM_CLIENTES = 1296
 FECHA_INICIO_NEGOCIO = datetime(2023, 1, 1)
 FECHA_HOY = datetime(2024, 10, 31)
 
@@ -143,24 +143,24 @@ print(df_clientes.head(10))
 
 PERFILES_FRECUENCIA = {
     'unico': {
-        'peso': 0.15,
-        'compras_mes': 0,  # Solo la primera compra
+        'peso': 0.12,
+        'compras_mes': 0,
     },
     'ocasional': {
-        'peso': 0.25,
-        'compras_mes': 0.4,
+        'peso': 0.23,
+        'compras_mes': 1.0,     # ×2.5
     },
     'regular': {
         'peso': 0.35,
-        'compras_mes': 1.5,
+        'compras_mes': 3.0,     # ×2
     },
     'frecuente': {
-        'peso': 0.20,
-        'compras_mes': 6,
+        'peso': 0.22,
+        'compras_mes': 12,      # ×2
     },
     'vip': {
-        'peso': 0.05,
-        'compras_mes': 15,
+        'peso': 0.08,
+        'compras_mes': 30,      # ×2
     }
 }
 
